@@ -1,0 +1,5 @@
+name: NNSSL
+ckpt_path: '/storage/homefs/jl25i045/workspace/AnonRes_ResEncL-OpenMind-MAE/checkpoint_final.pth'
+input_channels: 2
+num_classes: 1
+load_weights: False

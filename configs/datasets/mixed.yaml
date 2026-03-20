@@ -1,0 +1,15 @@
+name: Mixed
+batch_size_per_gpu: 1
+num_workers: 16
+hecktor_csv: 'data/HECKTOR/meta_data_hecktor.csv'
+gdphmm_csv: 'data/GDPHMM/meta_data_cleaned_path.csv'
+hecktor_root: '/storage/research/artorg_mia/Head_and_Neck/HECKTOR2025_resampled'
+
+down_HU: -1000
+up_HU: 1000
+
+in_size: [128, 128, 160]
+out_size: [128, 128, 160]
+with_aug: True
+target_spacing: [2.0, 2.5, 2.5]
+inference: valid

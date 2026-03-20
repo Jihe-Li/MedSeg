@@ -1,0 +1,26 @@
+defaults:
+  - _self_
+  - datasets: hecktor
+  - loss: seg
+  - network: nnssl
+  - optimizer: adamw
+  - scheduler: cosine
+
+max_epochs: 200
+name: debug
+stage: train
+
+# checkpoints
+print_freq: 10
+save_freq: 20
+ckpt_max_num: 2
+use_wandb: True
+resume: True
+resume_from: latest
+
+gradient_accumulation_steps: 1
+gradient_clipping: 5.0
+
+hydra:
+  run:
+    dir: outputs/${name}

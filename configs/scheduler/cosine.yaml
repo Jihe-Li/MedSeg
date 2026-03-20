@@ -1,0 +1,2 @@
+lr_policy: cosine
+warmup_ratio: 0.1

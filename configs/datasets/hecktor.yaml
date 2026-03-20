@@ -1,0 +1,15 @@
+name: HECKTOR
+batch_size_per_gpu: 1
+num_workers: 16
+hecktor_csv: 'data/HECKTOR/meta_data_clean_hecktor.csv'
+hecktor_root: '/storage/research/artorg_mia/Head_and_Neck/HECKTOR2025_resampled_iso_cropped'
+
+down_HU: -1000
+up_HU: 1000
+
+out_size: [224, 224, 224]
+with_aug: True
+target_spacing: [2.0, 2.0, 2.0]
+inference: valid
+fold_num: 5
+cross_validation_idx: 0

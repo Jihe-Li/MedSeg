@@ -1,0 +1,6 @@
+name: DeepLabv3Plus
+input_channels: 1
+num_classes: 1
+pretrained_encoder: False
+norm_type: group
+group_norm_groups: 8

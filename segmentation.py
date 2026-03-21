@@ -4,6 +4,7 @@ import wandb
 import torch
 import shutil
 import logging
+import numpy as np
 import torch.nn.functional as F
 
 from collections import defaultdict
@@ -28,7 +29,7 @@ from datasets.collate import collate_fn
 logger = get_logger(__name__, log_level="INFO")
 
 
-class Segmentator:
+class BaseSegmentator:
     """Base trainer class."""
 
     def __init__(self, config, is_train):
@@ -277,9 +278,7 @@ class Segmentator:
                     break
 
     def network_forward(self, data):
-        inputs = torch.cat([data['ct_ten'], data['pt_ten']], dim=1)
-        pred_logits = self.network(inputs).float()
-        return pred_logits
+        pass
 
     def _train_step(self, data, acc_metrics):
         config = self.config
@@ -337,6 +336,7 @@ class Segmentator:
         self.load_ckpt()
 
         self.network.eval()
+        self.dice_table = []
 
         acc_metrics = defaultdict(float)
         for data in tqdm(self.test_loader, ncols=80, desc="Steps", 
@@ -345,6 +345,8 @@ class Segmentator:
             acc_metrics = self._test_step(data, acc_metrics)
 
         if self.accelerator.is_main_process:
+            csv_folder = os.path.join(self.save_dir, 'csv', f'Epoch{self.epoch}_Step{self.step}')
+            io.save_arr_to_csv(self.dice_table, os.path.join(csv_folder, 'dice.csv'))
             summary = self.test_buffer.summary()
             message = "(Test --> epoch: %d, iters: %d)\n" % (self.epoch, self.step)
             message += "\n".join(
@@ -386,6 +388,9 @@ class Segmentator:
         dice = metrics.comp_dice(seg_pred, seg_gt)
         acc_metrics["dice"] = dice
         count = seg_gt.shape[0]
+
+        if not self.is_train:
+            self.dice_table.append(dice)
 
         self.test_buffer.update(acc_metrics, count)
         acc_metrics = defaultdict(float)
@@ -438,6 +443,38 @@ class Segmentator:
 
     @torch.no_grad()
     def _inference_step(self, data, acc_metrics):
+        pass
+
+    def count_params(self, network, optimizable_only=True):
+        if optimizable_only:
+            total = sum(p.numel() for p in network.parameters() if p.requires_grad)
+        else:
+            total = sum(p.numel() for p in network.parameters())
+        return total
+
+    def dict2list(self, metric_dict):
+        metric_value_per_case = np.full((self.config.seg_networks.num_classes + 1, ), np.nan)
+        for key, value in metric_dict.items():
+            idx_str = key.split('_')[1]
+            try:
+                idx = int(idx_str)
+            except:
+                idx = self.config.seg_networks.num_classes
+            metric_value_per_case[idx] = value
+        return metric_value_per_case
+
+
+class CTPlusPTSegmentator(BaseSegmentator):
+    def __init__(self, config, is_train):
+        super().__init__(config, is_train)
+
+    def network_forward(self, data):
+        inputs = torch.cat([data['ct_ten'], data['pt_ten']], dim=1)
+        pred_logits = self.network(inputs).float()
+        return pred_logits
+
+    @torch.no_grad()
+    def _inference_step(self, data, acc_metrics):
         pred_logits = self.network_forward(data)
         seg_pred = (torch.sigmoid(pred_logits) > 0.5).float()
         ct_ten = data['ct_ten'].float()
@@ -465,9 +502,37 @@ class Segmentator:
 
         return acc_metrics
 
-    def count_params(self, network, optimizable_only=True):
-        if optimizable_only:
-            total = sum(p.numel() for p in network.parameters() if p.requires_grad)
-        else:
-            total = sum(p.numel() for p in network.parameters())
-        return total
+
+class CTSegmentator(BaseSegmentator):
+    def __init__(self, config, is_train):
+        super().__init__(config, is_train)
+
+    def network_forward(self, data):
+        pred_logits = self.network(data['ct_ten'])
+        return pred_logits
+
+    @torch.no_grad()
+    def _inference_step(self, data, acc_metrics):
+        pred_logits = self.network_forward(data)
+        seg_pred = (torch.sigmoid(pred_logits) > 0.5).float()
+        ct_ten = data['ct_ten'].float()
+        seg_gt = data['gtv_ten'].bool().float()
+
+        count = seg_gt.shape[0]
+        dice = metrics.comp_dice(seg_pred, seg_gt)
+        acc_metrics["dice"] = dice
+        self.test_buffer.update(acc_metrics, count)
+        acc_metrics = defaultdict(float)
+
+        for i in range(count):
+            dataset_name, sample_id, params = data['dataset_name'][i], data['sample_id'][i], data['params'][i]
+            save_folder = os.path.join(self.save_dir, f'Epoch{self.epoch}_Step{self.step}', dataset_name)
+            os.makedirs(save_folder, exist_ok=True)
+            save_path_ct = os.path.join(save_folder, sample_id, sample_id + '_ct.nii.gz')
+            io.save_image(ct_ten[i][0], save_path_ct, params, is_tensor=True)
+            save_path_pred = os.path.join(save_folder, sample_id, sample_id + '_pred.nii.gz')
+            io.save_image(seg_pred[i][0], save_path_pred, params, is_tensor=True)
+            save_path_gt = os.path.join(save_folder, sample_id, sample_id + '_gt.nii.gz')
+            io.save_image(seg_gt[i][0], save_path_gt, params, is_tensor=True)
+
+        return acc_metrics

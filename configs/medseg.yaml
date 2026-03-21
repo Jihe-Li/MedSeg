@@ -9,6 +9,7 @@ defaults:
 max_epochs: 200
 name: debug
 stage: train
+segmentator: CTPlusPTSegmentator
 
 # checkpoints
 print_freq: 10

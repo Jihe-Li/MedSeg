@@ -2,14 +2,15 @@ name: Mixed
 batch_size_per_gpu: 1
 num_workers: 16
 hecktor_csv: 'data/HECKTOR/meta_data_hecktor.csv'
-gdphmm_csv: 'data/GDPHMM/meta_data_cleaned_path.csv'
 hecktor_root: '/storage/research/artorg_mia/Head_and_Neck/HECKTOR2025_resampled'
+segrap_root: '/storage/research/artorg_mia/Head_and_Neck/SegRap2023/SegRap2023_Training_Set_120cases_resampled_cropped'
 
 down_HU: -1000
 up_HU: 1000
 
-in_size: [128, 128, 160]
-out_size: [128, 128, 160]
+out_size: [192, 192, 192]
 with_aug: True
-target_spacing: [2.0, 2.5, 2.5]
+target_spacing: [2.0, 2.0, 2.0]
 inference: valid
+fold_num: 5
+cross_validation_idx: 0

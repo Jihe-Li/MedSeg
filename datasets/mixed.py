@@ -20,97 +20,82 @@ class MixedDataset(Dataset):
                 self.dtype = torch.float16
             case _:  
                self.dtype = torch.float32
-
-        if phase == 'train' or phase == 'valid':
-            self.hecktor_root = cfig['hecktor_root']
-            df = pd.read_csv(cfig['hecktor_csv'])
-            df = df.loc[df['CT'] == True]
-            df = df.loc[df['PT'] == True]
-            df = df.loc[df['ct2pet'] == phase]
-            self.hecktor_list = df['PID'].tolist()
         
+        self.hecktor_root = cfig['hecktor_root']
+        self.segrap_root = cfig['segrap_root']
+        df = pd.read_csv(cfig['hecktor_csv'])
+        df = df.loc[df['CT'] == True]
+        df = df.loc[df['PT'] == True]
+        df = df.loc[df['GTV'] == True]
+        self.cross_validation_idx = cfig['cross_validation_idx']
+        if phase == 'train':
+            train_folds = [i for i in range(cfig['fold_num']) if i != self.cross_validation_idx]
+            df = df.loc[df['cross-validation'].isin(train_folds)]        
         else:
-            df = pd.read_csv(cfig['gdphmm_csv'])
-            df = df.loc[df['site'] == 1]
-            df = df.loc[df['dev_split'] == phase]
-            df = df.loc[df['isVMAT'] == True]
-            self.gdphmm_list = df['npz_path_local'].tolist()
-
+            df = df.loc[df['cross-validation'] == self.cross_validation_idx]
+        self.hecktor_list = df['PID'].tolist()
+        self.segrap_list = [i for i in range(120)]
         self.phase = phase
 
     def __len__(self):
-        if self.phase == 'train' or self.phase == 'valid':
+        if self.phase == 'train':
             return len(self.hecktor_list)
-        elif self.phase == 'test':
-            return len(self.gdphmm_list)
+        else:
+            return len(self.hecktor_list) + len(self.segrap_list)
     
     def __getitem__(self, index):
-        if self.phase == 'train' or self.phase == 'valid':
-            keys = ['ct_ten', 'pt_ten']
+        if self.phase == 'train':
             PatientID = self.hecktor_list[index]
             ct_path = os.path.join(self.hecktor_root, PatientID, f'{PatientID}__CT.nii.gz')
-            pt_path = os.path.join(self.hecktor_root, PatientID, f'{PatientID}__PT.nii.gz')
+            gtv_path = os.path.join(self.hecktor_root, PatientID, f'{PatientID}.nii.gz')
+            ct_ten, params = io.load_image(ct_path, return_tensor=True)
+            gtv_ten, _     = io.load_image(gtv_path, return_tensor=True)
+            ct_ten = ct_ten.unsqueeze(0)
+            gtv_ten = gtv_ten.unsqueeze(0)
+            gtv_ten[gtv_ten != 1] = 0
+            dataset_name = 'HECKTOR'
 
-            ct_img = sitk.ReadImage(ct_path)
-            pt_img = sitk.ReadImage(pt_path)
-            # ct_img = resample_img(ct_img, self.cfig['target_spacing'])
-            # pt_img = resample_img(pt_img, self.cfig['target_spacing'])
-            params = {
-                'origin': ct_img.GetOrigin(),
-                'spacing': ct_img.GetSpacing(),
-                'direction': ct_img.GetDirection()
-            }
-
-            ct_ten = torch.FloatTensor(sitk.GetArrayFromImage(ct_img)).unsqueeze(0)
-            pt_ten = torch.FloatTensor(sitk.GetArrayFromImage(pt_img)).unsqueeze(0)
-            data_dict = {'ct_ten': ct_ten, 'pt_ten': pt_ten}
-            if self.cfig['with_aug'] and self.phase == 'train':
-                processing_func = tr_refine_augmentation(keys, self.cfig['out_size'])
-            else:
-                processing_func = tt_refine_augmentation(keys, self.cfig['out_size'])
-            data_dict = processing_func(data_dict)
-            ct_ten = data_dict['ct_ten']
-            pt_ten = data_dict['pt_ten']
-
-            ct_ten = ct_ten.clip(self.cfig['down_HU'], self.cfig['up_HU'])
-            ct_ten = (ct_ten - ct_ten.mean()) / (ct_ten.std() + 1e-6)
-
-            pt_percentile_low  = torch.quantile(pt_ten, 0.01)
-            pt_percentile_high = torch.quantile(pt_ten, 0.99)
-            pt_ten = (pt_ten.clip(pt_percentile_low, pt_percentile_high) - pt_percentile_low) / (pt_percentile_high - pt_percentile_low)
-
-            data_dict = dict()  
-            data_dict['ct_ten'] = ct_ten
-            data_dict['pt_ten'] = pt_ten
-            data_dict['params'] = params
-            data_dict['sample_id'] = PatientID
-            data_dict['dataset_name'] = 'HECKTOR'
-        
         else:
-            data_path = self.gdphmm_list[index]
-            ID = data_path.split('/')[-1].replace('.npz', '')
-            PatientID = ID.split('+')[0]
-            data_npz = np.load(data_path, allow_pickle=True)
-            In_dict = dict(data_npz)['arr_0'].item()
+            if index < len(self.hecktor_list):
+                PatientID = self.hecktor_list[index]
+                ct_path = os.path.join(self.hecktor_root, PatientID, f'{PatientID}__CT.nii.gz')
+                gtv_path = os.path.join(self.hecktor_root, PatientID, f'{PatientID}.nii.gz')
+                ct_ten, params = io.load_image(ct_path, return_tensor=True)
+                gtv_ten, _     = io.load_image(gtv_path, return_tensor=True)
+                ct_ten = ct_ten.unsqueeze(0)
+                gtv_ten = gtv_ten.unsqueeze(0)
+                gtv_ten[gtv_ten != 1] = 0
+                dataset_name = 'HECKTOR'
+            else:
+                PatientID = self.segrap_list[index - len(self.hecktor_list)]
+                ct_path = os.path.join(self.segrap_root, 'segrap_%04d', 'image.nii.gz')
+                gtv_path = os.path.join(self.segrap_root, 'segrap_%04d', 'GTVp.nii.gz')
+                ct_ten, params = io.load_image(ct_path, return_tensor=True)
+                gtv_ten, _     = io.load_image(gtv_path, return_tensor=True)
+                ct_ten = ct_ten.unsqueeze(0)
+                gtv_ten = gtv_ten.unsqueeze(0).bool().float()
+                dataset_name = 'SegRap'
 
-            data_dict = {'ct_ten': torch.FloatTensor(In_dict['img']).unsqueeze(0)}
-            processing_func = tt_refine_augmentation(['ct_ten'], self.cfig['out_size'])
-            data_dict = processing_func(data_dict)
+        data_dict = {'ct_ten': ct_ten, 'gtv_ten': gtv_ten}
+        keys_linear = ['ct_ten']
+        keys_nearest = ['gtv_ten']
+        if self.cfig['with_aug'] and self.phase == 'train':
+            processing_func = tr_refine_augmentation(keys_linear, keys_nearest, self.cfig['out_size'])
+        else:
+            processing_func = tt_refine_augmentation(keys_linear, keys_nearest, self.cfig['out_size'])
+        
+        data_dict = processing_func(data_dict)
+        ct_ten = data_dict['ct_ten']
+        gtv_ten = data_dict['gtv_ten']
+        ct_ten = ct_ten.clip(self.cfig['down_HU'], self.cfig['up_HU'])
+        ct_ten = (ct_ten - ct_ten.mean()) / (ct_ten.std() + 1e-6)
 
-            ct_ten = data_dict['ct_ten']
-            ct_ten = ct_ten.clip(self.cfig['down_HU'], self.cfig['up_HU'])
-            ct_ten = (ct_ten - ct_ten.mean()) / (ct_ten.std() + 1e-6)
-            params = {
-                'origin': In_dict['origin'],
-                'spacing': In_dict['spacing'],
-                'direction': In_dict['direction']
-            }
-
-            data_dict = dict()  
-            data_dict['ct_ten'] = ct_ten
-            data_dict['params'] = params
-            data_dict['sample_id'] = PatientID
-            data_dict['dataset_name'] = 'GDPHMM'
+        data_dict = dict()  
+        data_dict['ct_ten'] = ct_ten
+        data_dict['gtv_ten'] = gtv_ten
+        data_dict['params'] = params
+        data_dict['sample_id'] = PatientID
+        data_dict['dataset_name'] = dataset_name
 
         for key, value in data_dict.items():
             if isinstance(value, torch.Tensor):

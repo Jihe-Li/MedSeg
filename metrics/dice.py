@@ -8,7 +8,7 @@ def comp_dice(pred_seg, tar_seg):
     union_areas = pred_seg.sum((2, 3, 4)) + tar_seg.sum((2, 3, 4))
 
     dices = 2 * inter_areas / (union_areas + 1e-6)
-    return torch.mean(dices)
+    return torch.mean(dices).detach().cpu().item()
 
 
 if __name__ == "__main__":

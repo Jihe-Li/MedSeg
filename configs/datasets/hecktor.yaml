@@ -7,7 +7,7 @@ hecktor_root: '/storage/research/artorg_mia/Head_and_Neck/HECKTOR2025_resampled_
 down_HU: -1000
 up_HU: 1000
 
-out_size: [224, 224, 224]
+out_size: [192, 192, 192]
 with_aug: True
 target_spacing: [2.0, 2.0, 2.0]
 inference: valid

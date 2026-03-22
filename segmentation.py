@@ -18,13 +18,13 @@ from tqdm import tqdm
 from hydra.core.hydra_config import HydraConfig
 
 import networks
-import datasets
+import dataset
 import losses
 import metrics
 import utils
 from utils import io
 from utils.log_buffer import LogBuffer
-from datasets.collate import collate_fn
+from dataset.collate import collate_fn
 
 logger = get_logger(__name__, log_level="INFO")
 
@@ -98,9 +98,9 @@ class BaseSegmentator:
 
     def _init_dataloader(self):
         """Initialize dataloader."""
-        config = self.config.datasets
+        config = self.config.dataset
         if self.is_train:
-            self.train_dataset = datasets.__dict__[f'{config.name}Dataset'](config, 'train', self.mixed_precision)
+            self.train_dataset = dataset.__dict__[f'{config.name}Dataset'](config, 'train', self.mixed_precision)
             self.train_loader = DataLoader(
                 self.train_dataset, 
                 batch_size=config.batch_size_per_gpu, 
@@ -109,7 +109,7 @@ class BaseSegmentator:
                 pin_memory=True,
                 collate_fn=collate_fn
             )
-        self.test_dataset = datasets.__dict__[f'{config.name}Dataset'](config, config.inference, self.mixed_precision)
+        self.test_dataset = dataset.__dict__[f'{config.name}Dataset'](config, config.inference, self.mixed_precision)
         self.test_loader = DataLoader(
             self.test_dataset, 
             batch_size=config.batch_size_per_gpu, 
@@ -191,13 +191,13 @@ class BaseSegmentator:
     def train(self):
         """Train the model."""
         config = self.config
-        total_batch_size = config.datasets.batch_size_per_gpu * self.num_proc * self.acc_steps
+        total_batch_size = config.dataset.batch_size_per_gpu * self.num_proc * self.acc_steps
 
         logger.info("***** Running training *****")
         logger.info(f"  Num examples = {len(self.train_dataset)}")
         logger.info(f"  Num Epochs = {config.max_epochs}")
         logger.info(
-            f"  Instantaneous batch size per device = {config.datasets.batch_size_per_gpu}"
+            f"  Instantaneous batch size per device = {config.dataset.batch_size_per_gpu}"
         )
         logger.info(
             f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}"
@@ -316,12 +316,12 @@ class BaseSegmentator:
     def test(self):
         """Test the model's performance."""
         config = self.config
-        total_batch_size = config.datasets.batch_size_per_gpu * self.num_proc * self.acc_steps
+        total_batch_size = config.dataset.batch_size_per_gpu * self.num_proc * self.acc_steps
 
         logger.info("***** Running testing *****")
         logger.info(f"  Num examples = {len(self.test_dataset)}")
         logger.info(
-            f"  Instantaneous batch size per device = {config.datasets.batch_size_per_gpu}"
+            f"  Instantaneous batch size per device = {config.dataset.batch_size_per_gpu}"
         )
         logger.info(
             f"  Total test batch size (w. parallel, distributed & accumulation) = {total_batch_size}"
@@ -400,12 +400,12 @@ class BaseSegmentator:
     def inference(self):
         """Inference registration results."""
         config = self.config
-        total_batch_size = config.datasets.batch_size_per_gpu * self.num_proc
+        total_batch_size = config.dataset.batch_size_per_gpu * self.num_proc
 
         logger.info("***** Running inference *****")
         logger.info(f"  Num examples = {len(self.test_dataset)}")
         logger.info(
-            f"  Instantaneous batch size per device = {config.datasets.batch_size_per_gpu}"
+            f"  Instantaneous batch size per device = {config.dataset.batch_size_per_gpu}"
         )
         logger.info(
             f"  Total test batch size (w. parallel, distributed & accumulation) = {total_batch_size}"

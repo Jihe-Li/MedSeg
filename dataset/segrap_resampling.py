@@ -2,7 +2,7 @@ import os
 import sys
 import SimpleITK as sitk
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from datasets.hecktor_resampling import resample_img
+from dataset.hecktor_resampling import resample_img
 
 
 def get_topdown_physical_z_bounds(image: sitk.Image, max_slices: int = 192):

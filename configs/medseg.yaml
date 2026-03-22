@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - datasets: hecktor
+  - dataset: hecktor
   - loss: seg
   - network: nnssl
   - optimizer: adamw

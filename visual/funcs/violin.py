@@ -52,8 +52,11 @@ def draw_custom_violinplot(data_dict, save_path, font_size=12, bg_color='white',
         inner='box', 
         palette='Set2', # 可自定义颜色盘，例如 ['#86C6B9', '#F4A582']
         linewidth=1.5,
+        cut=0,          # 不向数据范围外延伸
+        bw_adjust=0.8,  # 可选：减小平滑导致的“鼓包”
         ax=ax
     )
+    # ax.set_ylim(0, 1)   # Dice 显式限制到 [0,1]
     
     # 6. 完善标签和图例细节
     ax.set_xlabel(x_label, fontsize=font_size + 2)

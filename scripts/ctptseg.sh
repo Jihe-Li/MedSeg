@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=90G
 #SBATCH --time=12:00:00
-#SBATCH --job-name=seg_fold3
+#SBATCH --job-name=seg_fold0
 #SBATCH --output=outputs/%x/output.log
 #SBATCH --error=outputs/%x/error.log
 
@@ -18,5 +18,4 @@ conda activate torch
 export WANDB_API_KEY="706b7fac4cabad0096600f592e3f3373f145ef86"
 
 accelerate launch --config_file ./configs/accelerate/fp16.yaml run.py \
-    datasets.cross_validation_idx=3 \
-    name=seg_fold3 
+    name=seg_fold0 

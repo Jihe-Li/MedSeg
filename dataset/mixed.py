@@ -67,9 +67,9 @@ class MixedDataset(Dataset):
                 gtv_ten[gtv_ten != 1] = 0
                 dataset_name = 'HECKTOR'
             else:
-                PatientID = self.segrap_list[index - len(self.hecktor_list)]
-                ct_path = os.path.join(self.segrap_root, 'segrap_%04d' % PatientID, 'image.nii.gz')
-                gtv_path = os.path.join(self.segrap_root, 'segrap_%04d' % PatientID, 'GTVp.nii.gz')
+                PatientID = 'segrap_%04d' % self.segrap_list[index - len(self.hecktor_list)]
+                ct_path = os.path.join(self.segrap_root, PatientID, 'image.nii.gz')
+                gtv_path = os.path.join(self.segrap_root, PatientID, 'GTVp.nii.gz')
                 ct_ten, params = io.load_image(ct_path, return_tensor=True)
                 gtv_ten, _     = io.load_image(gtv_path, return_tensor=True)
                 ct_ten = ct_ten.unsqueeze(0)

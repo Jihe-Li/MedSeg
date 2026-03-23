@@ -19,5 +19,6 @@ export WANDB_API_KEY="706b7fac4cabad0096600f592e3f3373f145ef86"
 
 accelerate launch --config_file ./configs/accelerate/fp16.yaml run.py \
     network.input_channels=1 \
+    dataset=mixed \
     segmentator=CTSegmentator \
     name=ctseg 

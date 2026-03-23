@@ -345,8 +345,22 @@ class BaseSegmentator:
             acc_metrics = self._test_step(data, acc_metrics)
 
         if self.accelerator.is_main_process:
-            csv_folder = os.path.join(self.save_dir, 'csv', f'Epoch{self.epoch}_Step{self.step}')
-            io.save_arr_to_csv(self.dice_table, os.path.join(csv_folder, 'dice.csv'))
+            if hasattr(self, 'dice_table'):
+                csv_folder = os.path.join(self.save_dir, 'csv', f'Epoch{self.epoch}_Step{self.step}')
+                io.save_arr_to_csv(self.dice_table, os.path.join(csv_folder, 'dice.csv'))
+            if hasattr(self, 'hd_table'):
+                csv_folder = os.path.join(self.save_dir, 'csv', f'Epoch{self.epoch}_Step{self.step}')
+                io.save_arr_to_csv(self.hd_table, os.path.join(csv_folder, 'hd.csv'))
+            if hasattr(self, 'assd_table'):
+                csv_folder = os.path.join(self.save_dir, 'csv', f'Epoch{self.epoch}_Step{self.step}')
+                io.save_arr_to_csv(self.assd_table, os.path.join(csv_folder, 'assd.csv'))
+            if hasattr(self, 'vol_pred_table'):
+                csv_folder = os.path.join(self.save_dir, 'csv', f'Epoch{self.epoch}_Step{self.step}')
+                io.save_arr_to_csv(self.vol_pred_table, os.path.join(csv_folder, 'vol_pred.csv'))
+            if hasattr(self, 'vol_gt_table'):
+                csv_folder = os.path.join(self.save_dir, 'csv', f'Epoch{self.epoch}_Step{self.step}')
+                io.save_arr_to_csv(self.vol_gt_table, os.path.join(csv_folder, 'vol_gt.csv'))
+
             summary = self.test_buffer.summary()
             message = "(Test --> epoch: %d, iters: %d)\n" % (self.epoch, self.step)
             message += "\n".join(
@@ -453,13 +467,13 @@ class BaseSegmentator:
         return total
 
     def dict2list(self, metric_dict):
-        metric_value_per_case = np.full((self.config.seg_networks.num_classes + 1, ), np.nan)
+        metric_value_per_case = np.full((self.config.network.num_classes + 1, ), np.nan)
         for key, value in metric_dict.items():
             idx_str = key.split('_')[1]
             try:
                 idx = int(idx_str)
             except:
-                idx = self.config.seg_networks.num_classes
+                idx = self.config.network.num_classes
             metric_value_per_case[idx] = value
         return metric_value_per_case
 
@@ -472,6 +486,43 @@ class CTPlusPTSegmentator(BaseSegmentator):
         inputs = torch.cat([data['ct_ten'], data['pt_ten']], dim=1)
         pred_logits = self.network(inputs).float()
         return pred_logits
+
+    @torch.no_grad()
+    def _test_step(self, data, acc_metrics):
+        pred_logits = self.network_forward(data)
+        seg_pred = (torch.sigmoid(pred_logits) > 0.5).float()
+        seg_gt = data['gtv_ten'].bool().float()
+
+        dice = metrics.comp_dice(seg_pred, seg_gt)
+        hd, assd = metrics.comp_surf_dis(seg_pred, seg_gt)
+        pred_volume, gt_volume = metrics.comp_volume(seg_pred, seg_gt)
+        acc_metrics["dice"] = dice
+        acc_metrics.update(hd)
+        acc_metrics.update(assd)
+        acc_metrics['vol_pred'] = pred_volume
+        acc_metrics['vol_gt'] = gt_volume
+        count = seg_gt.shape[0]
+
+        if not self.is_train:
+            if not hasattr(self, 'dice_table'):
+                self.dice_table = []
+            if not hasattr(self, 'hd_table'):
+                self.hd_table = []
+            if not hasattr(self, 'assd_table'):
+                self.assd_table = []
+            if not hasattr(self, 'vol_pred_table'):
+                self.vol_pred_table = []
+            if not hasattr(self, 'vol_gt_table'):
+                self.vol_gt_table = []
+            self.dice_table.append(dice)
+            self.hd_table.append(self.dict2list(hd))
+            self.assd_table.append(self.dict2list(assd))
+            self.vol_pred_table.append(pred_volume)
+            self.vol_gt_table.append(gt_volume)
+
+        self.test_buffer.update(acc_metrics, count)
+        acc_metrics = defaultdict(float)
+        return acc_metrics
 
     @torch.no_grad()
     def _inference_step(self, data, acc_metrics):
@@ -512,6 +563,26 @@ class CTSegmentator(BaseSegmentator):
         return pred_logits
 
     @torch.no_grad()
+    def _test_step(self, data, acc_metrics):
+        pred_logits = self.network_forward(data)
+        seg_pred = (torch.sigmoid(pred_logits) > 0.5).float()
+        seg_gt = data['gtv_ten'].bool().float()
+
+        count = seg_gt.shape[0]
+        for i in range(count):
+            dataset_name = data['dataset_name'][i]
+            dice = metrics.comp_dice(seg_pred[i: i+1], seg_gt[i: i+1])
+            acc_metrics[f"dice_{dataset_name}"] = dice
+
+            if not self.is_train:
+                if not hasattr(self, 'dice_table'):
+                    self.dice_table = []
+
+            self.test_buffer.update(acc_metrics, count)
+            acc_metrics = defaultdict(float)
+            return acc_metrics
+
+    @torch.no_grad()
     def _inference_step(self, data, acc_metrics):
         pred_logits = self.network_forward(data)
         seg_pred = (torch.sigmoid(pred_logits) > 0.5).float()
@@ -519,13 +590,13 @@ class CTSegmentator(BaseSegmentator):
         seg_gt = data['gtv_ten'].bool().float()
 
         count = seg_gt.shape[0]
-        dice = metrics.comp_dice(seg_pred, seg_gt)
-        acc_metrics["dice"] = dice
-        self.test_buffer.update(acc_metrics, count)
-        acc_metrics = defaultdict(float)
-
         for i in range(count):
             dataset_name, sample_id, params = data['dataset_name'][i], data['sample_id'][i], data['params'][i]
+            dice = metrics.comp_dice(seg_pred[i: i+1], seg_gt[i: i+1])
+            acc_metrics[f"dice_{dataset_name}"] = dice
+            self.test_buffer.update(acc_metrics, count)
+            acc_metrics = defaultdict(float)
+
             save_folder = os.path.join(self.save_dir, f'Epoch{self.epoch}_Step{self.step}', dataset_name)
             os.makedirs(save_folder, exist_ok=True)
             save_path_ct = os.path.join(save_folder, sample_id, sample_id + '_ct.nii.gz')
